@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SentinelX Chat - Private</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;margin:0;padding:16px}
+  #loginBox, #app{max-width:1100px;margin:24px auto}
+  .card{background:#fff;padding:18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.06)}
+  #loginBox input,#loginBox button{width:100%;padding:10px;margin:8px 0;border-radius:6px;border:1px solid #ccc}
+  #loginBox button{background:#2563eb;color:#fff;border:none}
+  #app{display:none;gap:12px;height:82vh;display:flex}
+  #sidebar{width:260px;display:flex;flex-direction:column;align-items:center;gap:12px}
+  #sidebar img{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #2563eb}
+  #users{width:240px;padding:12px;overflow:auto}
+  #userList{list-style:none;padding:0;margin:0}
+  #userList li{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #eee;cursor:pointer}
+  #userList li:hover{background:#f0f4ff}
+  #userList img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2563eb}
+  #chatArea{flex:1;display:flex;flex-direction:column;height:100%}
+  #chatHeader{display:flex;align-items:center;gap:10px;padding:8px;background:#eef2ff;border-radius:8px;margin-bottom:8px}
+  #chatHeader img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #2563eb}
+  #messages{flex:1;padding:12px;overflow:auto;border-radius:8px;background:#fff;border:1px solid #eee}
+  .msg{margin-bottom:10px}
+  .sender{font-weight:bold;color:#2563eb}
+  .text{margin-top:4px}
+  .media img,.media video{max-width:320px;border-radius:8px;display:block;margin-top:6px}
+  #composer{display:flex;gap:8px;padding:10px;background:#fff;border-radius:8px;border:1px solid #eee;margin-top:8px}
+  #composer input[type="text"]{flex:1;padding:8px;border-radius:6px;border:1px solid #ccc}
+  #composer button{padding:8px 12px;border-radius:6px;background:#2563eb;color:#fff;border:none}
+  #composer label{background:#2563eb;color:white;padding:8px;border-radius:6px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginBox" class="card">
+  <h2>Login to SentinelX Chat</h2>
+  <input id="loginEmail" placeholder="Email" type="email"/>
+  <input id="loginPassword" placeholder="Password" type="password"/>
+  <button id="loginBtn">Login</button>
+  <p id="loginMsg" style="min-height:18px;color:red"></p>
+  <p style="margin-top:6px">No account? <a href="register.html">Register here</a></p>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="sidebar" class="card" style="min-width:260px">
+    <img id="mePhoto" src="https://via.placeholder.com/96?text=No+Photo" alt="me"/>
+    <div id="meName" style="font-weight:bold;color:#2563eb">Loading...</div>
+    <div id="meEmail" style="color:#666;font-size:13px"></div>
+    <button id="logoutBtn" style="margin-top:auto;background:#dc2626;color:#fff;padding:8px;border:none;border-radius:6px;cursor:pointer">Logout</button>
+  </div>
+
+  <div id="users" class="card">
+    <h3 style="margin-top:0;color:#2563eb">Users</h3>
+    <ul id="userList"></ul>
+  </div>
+
+  <div id="chatArea" class="card">
+    <div id="chatHeader" style="display:none">
+      <img id="chatUserPhoto" src="" alt="User"/>
+      <div>
+        <div id="chatUserName" style="font-weight:bold;color:#2563eb"></div>
+        <div id="chatUserEmail" style="font-size:12px;color:#666"></div>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <div id="composer">
+      <input id="textIn" type="text" placeholder="Type a message..." />
+      <label for="mediaIn">📎</label>
+      <input id="mediaIn" type="file" accept="image/*,video/*" style="display:none" />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBATQcbJOTWRcgy92IZNfHO4t-qJNCONqs",
+  authDomain: "version3-sentxchat-db.firebaseapp.com",
+  databaseURL: "https://version3-sentxchat-db-default-rtdb.firebaseio.com",
+  projectId: "version3-sentxchat-db",
+  storageBucket: "version3-sentxchat-db.firebasestorage.app",
+  messagingSenderId: "52628771994",
+  appId: "1:52628771994:web:cfd5b53a81a3ec4e7dbb23"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+const loginBox = document.getElementById('loginBox');
+const app = document.getElementById('app');
+const loginBtn = document.getElementById('loginBtn');
+const loginMsg = document.getElementById('loginMsg');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const mePhoto = document.getElementById('mePhoto');
+const meName = document.getElementById('meName');
+const meEmail = document.getElementById('meEmail');
+
+const userListEl = document.getElementById('userList');
+const messagesEl = document.getElementById('messages');
+const textIn = document.getElementById('textIn');
+const mediaIn = document.getElementById('mediaIn');
+const sendBtn = document.getElementById('sendBtn');
+
+const chatHeader = document.getElementById('chatHeader');
+const chatUserPhoto = document.getElementById('chatUserPhoto');
+const chatUserName = document.getElementById('chatUserName');
+const chatUserEmail = document.getElementById('chatUserEmail');
+
+let currentChatUid = null;
+let messagesRef = null;
+
+// LOGIN
+loginBtn.addEventListener('click', async () => {
+  loginMsg.style.color = 'red';
+  loginMsg.textContent = '';
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) { loginMsg.textContent = 'Enter email and password.'; return; }
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    loginMsg.style.color = 'green';
+    loginMsg.textContent = 'Logged in — loading chat...';
+  } catch(e) { loginMsg.textContent = e.message; }
+});
+
+logoutBtn.addEventListener('click', () => auth.signOut());
+
+async function ensureDbUser(uid, authUser) {
+  const snap = await db.ref('users/' + uid).once('value');
+  if (snap.exists()) return;
+  const fallback = {
+    username: authUser.displayName || (authUser.email ? authUser.email.split('@')[0] : 'User'),
+    email: authUser.email || '',
+    profilePhoto: authUser.photoURL || '',
+    createdAt: Date.now()
+  };
+  await db.ref('users/' + uid).set(fallback);
+}
+
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    await ensureDbUser(user.uid, user);
+    loginBox.style.display = 'none';
+    app.style.display = 'flex';
+
+    db.ref('users/' + user.uid).once('value').then(s => {
+      const u = s.val() || {};
+      mePhoto.src = u.profilePhoto || user.photoURL || 'https://via.placeholder.com/96?text=No+Photo';
+      meName.textContent = u.username || user.displayName || 'No Username';
+      meEmail.textContent = u.email || user.email || '';
+    });
+
+    startUsersListener();
+  } else {
+    app.style.display = 'none';
+    loginBox.style.display = 'block';
+    clearUI();
+  }
+});
+
+function startUsersListener() {
+  db.ref('users').on('value', snapshot => {
+    const users = snapshot.val() || {};
+    userListEl.innerHTML = '';
+    Object.entries(users).forEach(([uid, data]) => {
+      if (uid === auth.currentUser.uid) return;
+      const li = document.createElement('li');
+      const img = document.createElement('img');
+      img.src = data.profilePhoto || 'https://via.placeholder.com/40?text=No';
+      const info = document.createElement('div');
+      info.style.fontSize = '13px';
+      const nameEl = document.createElement('div');
+      nameEl.style.fontWeight = 'bold'; nameEl.style.color = '#2563eb';
+      nameEl.textContent = data.username || '(No name)';
+      const emailEl = document.createElement('div');
+      emailEl.style.color = '#666'; emailEl.style.fontSize='12px';
+      emailEl.textContent = data.email || '';
+      info.appendChild(nameEl); info.appendChild(emailEl);
+      li.appendChild(img); li.appendChild(info);
+      li.addEventListener('click', () => openPrivateChat(uid, data));
+      userListEl.appendChild(li);
+    });
+  });
+}
+
+function openPrivateChat(uid, userData) {
+  currentChatUid = uid;
+  chatHeader.style.display = 'flex';
+  chatUserPhoto.src = userData.profilePhoto || 'https://via.placeholder.com/40?text=No';
+  chatUserName.textContent = userData.username || '(No name)';
+  chatUserEmail.textContent = userData.email || '';
+
+  if (messagesRef) messagesRef.off();
+  const myUid = auth.currentUser.uid;
+  const chatId = [myUid, uid].sort().join('_');
+  messagesRef = db.ref('privateMessages/' + chatId);
+  messagesRef.off();
+  messagesRef.limitToLast(200).on('value', snap => {
+    renderMessages(snap.val() || {});
+  });
+}
+
+function renderMessages(messagesObj){
+  messagesEl.innerHTML = '';
+  const entries = Object.entries(messagesObj).sort((a,b)=> (a[1].ts||0) - (b[1].ts||0));
+  entries.forEach(([id,msg])=>{
+    const div = document.createElement('div'); div.className = 'msg';
+    const sender = document.createElement('div'); sender.className='sender';
+    sender.textContent = msg.senderName || msg.senderEmail || 'Unknown';
+    div.appendChild(sender);
+    if (msg.type === 'text') {
+      const t = document.createElement('div'); t.className='text'; t.textContent = msg.text || '';
+      div.appendChild(t);
+    } else if (msg.type === 'image' || msg.type === 'video') {
+      if (msg.text) {
+        const t = document.createElement('div'); t.className='text'; t.textContent = msg.text;
+        div.appendChild(t);
+      }
+      const mediaWrap = document.createElement('div'); mediaWrap.className='media';
+      if (msg.type === 'image') {
+        const img = document.createElement('img'); img.src = msg.media || ''; mediaWrap.appendChild(img);
+      } else {
+        const vid = document.createElement('video'); vid.src = msg.media || ''; vid.controls = true; mediaWrap.appendChild(vid);
+      }
+      div.appendChild(mediaWrap);
+    }
+    const timeEl = document.createElement('div'); timeEl.style.fontSize='11px'; timeEl.style.color='#888';
+    timeEl.textContent = new Date(msg.ts||0).toLocaleString();
+    div.appendChild(timeEl);
+    messagesEl.appendChild(div);
+  });
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+sendBtn.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const user = auth.currentUser;
+  if (!user) return alert('Please login');
+  if (!currentChatUid) return alert('Select a user to chat with');
+
+  const text = textIn.value.trim();
+  const file = mediaIn.files[0];
+  const chatId = [user.uid, currentChatUid].sort().join('_');
+
+  if (file) {
+    const allowed = file.type.startsWith('image/') || file.type.startsWith('video/');
+    if (!allowed) return alert('Only image/video allowed');
+    const base64 = await new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=>res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+    const type = file.type.startsWith('image/') ? 'image' : 'video';
+    await db.ref('privateMessages/' + chatId).push({
+      senderUid: user.uid,
+      senderEmail: user.email || '',
+      senderName: meName.textContent || '',
+      type,
+      media: base64,
+      text: text || '',
+      ts: Date.now()
+    });
+    textIn.value = ''; mediaIn.value = '';
+    return;
+  }
+
+  if (!text) return;
+  await db.ref('privateMessages/' + chatId).push({
+    senderUid: user.uid,
+    senderEmail: user.email || '',
+    senderName: meName.textContent || '',
+    type: 'text',
+    text,
+    ts: Date.now()
+  });
+  textIn.value = '';
+});
+
+function clearUI(){
+  userListEl.innerHTML = '';
+  messagesEl.innerHTML = '';
+  mePhoto.src = 'https://via.placeholder.com/96?text=No+Photo';
+  meName.textContent = 'Loading...';
+  meEmail.textContent = '';
+}
+</script>
+</body>
+</html>
